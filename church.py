@@ -51,7 +51,7 @@ class AudioEditLength:
 
 
 @dataclass
-class AudioEditingEnhancement(slot=True):
+class AudioEditingEnhancement:
     file_path: Path
     # return path is a folder not a file
     return_file_part: Path
@@ -61,13 +61,13 @@ class AudioEditingEnhancement(slot=True):
     filename: str = field(init=False)
 
     def __post_init__(self):
+        self.file_path = Path(self.file_path)
+        self.return_file_part = Path(self.return_file_part)
+
         if not Path.exists(self.file_path):
             raise ValueError("file does not exist")
         if not Path.is_dir(self.return_file_part):
             raise ValueError("A valid path was not provided")
-
-        self.file_path = Path(self.file_path)
-        self.return_file_part = Path(self.return_file_part)
 
         self.file_extension = self.file_path.suffix.strip(".")
         self.file_size = self.file_path.stat().st_size
@@ -94,9 +94,10 @@ class AudioEditingEnhancement(slot=True):
         )
         filename = f"{self.filename}_automation_clipped.{self.file_extension}"
         with manage_pwd(self.return_file_part):
-            return self._export_file_segment(
+            self._export_file_segment(
                 clipped_file, filename, self.file_extension
             )
+        return
 
     # ##############################################################
     # TODO: complete implementation for cutting specified timestamps
@@ -260,14 +261,16 @@ class AudioTextDetails:
 
 def main():
     audi_enhanced = AudioEditingEnhancement("Business_Service.mp3", "./edited_files")
-    audi_enhanced.clip_by_timestamp(
-        (
-            Timestamp(12.3, 12.4),
-            Timestamp(20.1, 21.5),
-            Timestamp(22.05, 22.10),
-            Timestamp(30.5, 31.1),
-        )
-    )
+    audi_enhanced.clip_file_start_and_end(Timestamp(10, 0.3))
+    # audi_enhanced.divide_by_specified_lengths([23, 41, 67])
+    # audi_enhanced.clip_by_timestamp(
+    #     (
+    #         Timestamp(12.3, 12.4),
+    #         Timestamp(20.1, 21.5),
+    #         Timestamp(22.05, 22.10),
+    #         Timestamp(30.5, 31.1),
+    #     )
+    # )
 
 
 if __name__ == "__main__":
