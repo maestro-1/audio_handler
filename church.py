@@ -94,9 +94,7 @@ class AudioEditingEnhancement:
         )
         filename = f"{self.filename}_automation_clipped.{self.file_extension}"
         with manage_pwd(self.return_file_part):
-            self._export_file_segment(
-                clipped_file, filename, self.file_extension
-            )
+            self._export_file_segment(clipped_file, filename, self.file_extension)
         return
 
     # ##############################################################
@@ -205,6 +203,7 @@ class CSVFileAudioEdit:
 
     Skips any column with status done
     """
+
     csv_file: Path
 
     def _run_csv_read_for_podcast(self) -> list[AudioEditLength]:
