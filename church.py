@@ -9,9 +9,6 @@ from pydub import AudioSegment
 import openai
 
 
-openai_key: str = "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"
-
-
 @contextmanager
 def manage_pwd(path: Path):
     if not Path.is_dir(path):
