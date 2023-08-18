@@ -1,0 +1,4 @@
+*.mp3
+/filler_words.txt
+.DS_Store
+

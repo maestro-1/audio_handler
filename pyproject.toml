@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "church-side"
+version = "0.1.0"
+description = ""
+authors = ["Oghenemarho"]
+readme = "README.md"
+packages = [{include = "church_side"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pydub = "^0.25.1"
+openai = "^0.27.8"
+requests = "^2.31.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
