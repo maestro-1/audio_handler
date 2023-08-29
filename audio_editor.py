@@ -2,11 +2,12 @@ import os
 import csv
 import math
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pydub import AudioSegment
-import openai
+
+from .types_container import Timestamp, AudioEditingTimestamp, AudioEditLength
 
 
 @contextmanager
@@ -21,33 +22,6 @@ def manage_pwd(path: Path):
         yield
     finally:
         os.chdir(orignal_working_directory)
-
-
-@dataclass
-class Timestamp:
-    start: int
-    end: int
-
-    """
-    The timestamp is in milliseconds.
-    This is in accordance with the interface of pydub
-    """
-
-    def __post_init__(self):
-        self.start = self.start * 60 * 1000
-        self.end = self.end * 60 * 1000
-
-
-@dataclass
-class AudioEditingTimestamp:
-    filename: Path
-    timestamp: Timestamp
-
-
-@dataclass
-class AudioEditLength:
-    filename: Path
-    length: float
 
 
 @dataclass
@@ -97,24 +71,6 @@ class AudioEditingEnhancement:
             self._export_file_segment(clipped_file, filename, self.file_extension)
         return
 
-    # ##############################################################
-    # TODO: complete implementation for cutting specified timestamps
-    # ##############################################################
-    def _clip_by_timestamp(self, timestamps: Iterable[Timestamp]):
-        for timestamp in timestamps:
-            start_mil_secs = timestamp.start
-            end_mil_secs = timestamp.end
-            yield self.file_segment[start_mil_secs:end_mil_secs]
-
-    def clip_by_timestamp(self, timestamps: Iterable[Timestamp]):
-        file_segments = self._clip_by_timestamp(timestamps)
-        combined_file_segment: AudioSegment = sum(file_segments)
-        filename = f"{self.filename}_automation_clipped.{self.file_extension}"
-        with manage_pwd(self.return_file_part):
-            return self._export_file_segment(
-                combined_file_segment, filename, self.file_extension
-            )
-
     def divide_audio_by_length(self, length: float) -> None:
         "The last cut will be affected by math.ceil, so do not use that for the cut"
         number_of_cuts: int = math.ceil(self._audio_length_in_seconds / (length * 60))
@@ -156,6 +112,18 @@ class AudioEditingEnhancement:
                 self._export_file_segment(message, filename, self.file_extension)
         return
 
+    def add_intro(self, audio_intro: AudioSegment):
+        """
+        Add intro to audio
+        """
+        file_with_extension = audio_intro + self.file_segment
+        file_with_extension.export()
+        filename = f"{self.filename}_with_intro.{self.file_extension}"
+        with manage_pwd(self.return_file_part):
+            self._export_file_segment(
+                file_with_extension, filename, self.file_extension
+            )
+
     def _export_file_segment(
         self, file: AudioSegment, filename: str, file_extension: str
     ):
@@ -190,6 +158,24 @@ class AudioEditingEnhancement:
                 self._export_file_segment(message, filename, self.file_extension)
         return
 
+    # ##############################################################
+    # TODO: complete implementation for cutting specified timestamps
+    # ##############################################################
+    def _clip_by_timestamp(self, timestamps: Iterable[Timestamp]):
+        for timestamp in timestamps:
+            start_mil_secs = timestamp.start
+            end_mil_secs = timestamp.end
+            yield self.file_segment[start_mil_secs:end_mil_secs]
+
+    def clip_by_timestamp(self, timestamps: Iterable[Timestamp]):
+        file_segments = self._clip_by_timestamp(timestamps)
+        combined_file_segment: AudioSegment = sum(file_segments)
+        filename = f"{self.filename}_automation_clipped.{self.file_extension}"
+        with manage_pwd(self.return_file_part):
+            return self._export_file_segment(
+                combined_file_segment, filename, self.file_extension
+            )
+
 
 @dataclass
 class CSVFileAudioEdit:
@@ -206,61 +192,95 @@ class CSVFileAudioEdit:
 
     csv_file: Path
 
-    def _run_csv_read_for_podcast(self) -> list[AudioEditLength]:
+    def _run_csv_read_for_podcast(self) -> Generator[AudioEditLength]:
         """
         Read csv file and derive the length to cut for podcast.
-        """
 
-    def _run_csv_read_for_aimed_audio(self) -> list[AudioEditingTimestamp]:
+        The format for the csv documents here is:
+        file_name | status | positions to cut
+        """
+        with open(self.csv_file, mode="r") as csv_file:
+            csv_rows = csv.reader(csv_file, delimiter=",")
+            for row in csv_rows:
+                if line_count := 0:
+                    continue
+                name, _, cuts = row[0], row[1], row[2:]
+                if type(cuts) == int:
+                    cuts = list(cuts)
+                yield AudioEditLength(name, cuts)
+
+    def _run_csv_read_for_aimed_audio(self) -> Generator[AudioEditingTimestamp]:
         """
         Read csv file and derive the beginning and end which users want to keep in their audio
+
+        The format for the csv documents here is:
+        file_name | start | end
         """
+        with open(self.csv_file, mode="r") as csv_file:
+            csv_rows = csv.DictReader(csv_file)
+            for row in csv_rows:
+                name, start, end = (
+                    row["name"],
+                    row["start"],
+                    row["end"] if row["end"] else 0,
+                )
+                yield AudioEditingTimestamp(name, Timestamp(start, end))
 
     def _run_csv_read_timestamp(self) -> list[AudioEditingTimestamp]:
         """
         Read csv file and derive the different timestamps intend for being cut out of the audio
         """
 
-    def process_csv(self) -> list[AudioEditingTimestamp]:
+    def process_csv(self, csv_type: str):
         """
         Read csv and derive for editting audios, cutting audio's to specied length or removing just the relevant parts
         of the audio.
         Get the relavant path the file specified in the csv document
         """
+        match csv_type:
+            case "podcast":
+                return (self._run_csv_read_for_podcast(), "./episodic")
+            case "main_body":
+                return (self._run_csv_read_for_aimed_audio(), "./main_body")
+            case _:
+                raise ValueError("This csv type is not currently supported")
 
 
-@dataclass
-class AudioTextDetails:
-    """
-    Experimental definition:
+"""
+Need a function to run argparse so that arguments can be passed from the 
+terminal. This will allow for chaining without having to touch the source code
+"""
 
 
-    # Returns multiple files
-    - transcript with message_title as the file name
-    - csv containing message_title, guessed_timestamp, words_at_timestamp
-    """
+def run(csv_type: str, csv_path: str):
+    generated_information, return_directory = CSVFileAudioEdit(csv_path).process_csv(
+        csv_type
+    )
 
-    def run_open_ai(self, audio_file):
-        """
-        Get the text transcription from openai and write it into a text file
-        """
-        transcript = openai.Audio.transcribe("whisper-1", audio_file)
-        return transcript["text"]
-
-    def run_manual(self, audio_file_transcript: Path):
-        """
-        Run every word through the filter words list text
-        Get the timestamp for each word by dividing the total length of words in the transcript
-        by the total length of the audio to find the rough range of where specific words are
-
-        Write the words(sentence), the message and the timestamp for target words in a csv file
-        for vetting if it needs to be removed or not
-        """
-
+    for info in generated_information:
+        audi_enhanced = AudioEditingEnhancement(info.filename, return_directory)
+        match csv_type:
+            case "podcast":
+                audi_enhanced.clip_file_start_and_end(info.timestamp)
+            case "main_body":
+                audi_enhanced.divide_by_specified_lengths(info.lengths)
+    return
 
 def main():
-    audi_enhanced = AudioEditingEnhancement("Business_Service.mp3", "./edited_files")
-    audi_enhanced.clip_file_start_and_end(Timestamp(10, 0.3))
+    pass
+
+
+def main_test_mode():
+    audi_enhanced = AudioEditingEnhancement(
+        "Business_Service_23_59.mp3", "./edited_files"
+    )
+    intro_path = Path("church_intro.wav")
+    intro_segment = AudioSegment.from_file(
+        file=intro_path.name, format=intro_path.suffix.strip(".")
+    )
+    audi_enhanced.add_intro(intro_segment)
+
+    # audi_enhanced.clip_file_start_and_end(Timestamp(10, 0.3))
     # audi_enhanced.divide_by_specified_lengths([23, 41, 67])
     # audi_enhanced.clip_by_timestamp(
     #     (
@@ -273,4 +293,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main_test_mode()

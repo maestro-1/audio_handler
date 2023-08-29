@@ -1,4 +1,5 @@
 *.mp3
+*.wav
 /filler_words.txt
 .DS_Store
 
