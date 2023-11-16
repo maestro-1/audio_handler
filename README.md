@@ -1,11 +1,13 @@
 # audio_handler
 This is a project for performing actions on audio files on a large scale. 
+It is a CLI tool
 
 ### The Workflow
-There are 3 different kind of processes. 
+There are 4 different kind of processes. 
 - The first to cut out unwanted parts in the beginning and at the end
 - The Second to automate the cutting out of pieces of an audio
 - The Third to cut the audio file into multiple parts
+- The adding of intro and outtro to the audio
 
 You may want to perform 1 or more of these processes on a single file. Doing this is simple
 The general workflow for performing the action is to put the name of the file you want to work on in the 

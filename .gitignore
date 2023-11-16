@@ -2,4 +2,4 @@
 *.wav
 /filler_words.txt
 .DS_Store
-
+*.csv

@@ -7,7 +7,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pydub import AudioSegment
 
-from .types_container import Timestamp, AudioEditingTimestamp, AudioEditLength
+from audio_editor.types_container import (
+    Timestamp,
+    AudioEditingTimestamp,
+    AudioEditLength,
+)
 
 
 @contextmanager
@@ -39,7 +43,7 @@ class AudioEditingEnhancement:
         self.return_file_part = Path(self.return_file_part)
 
         if not Path.exists(self.file_path):
-            raise ValueError("file does not exist")
+            raise ValueError(f"{self.file_path} file does not exist")
         if not Path.is_dir(self.return_file_part):
             raise ValueError("A valid path was not provided")
 
@@ -192,7 +196,7 @@ class CSVFileAudioEdit:
 
     csv_file: Path
 
-    def _run_csv_read_for_podcast(self) -> Generator[AudioEditLength]:
+    def _run_csv_read_for_podcast(self) -> Generator[AudioEditLength, None, None]:
         """
         Read csv file and derive the length to cut for podcast.
 
@@ -207,9 +211,12 @@ class CSVFileAudioEdit:
                 name, _, cuts = row[0], row[1], row[2:]
                 if type(cuts) == int:
                     cuts = list(cuts)
+                print(name, cuts)
                 yield AudioEditLength(name, cuts)
 
-    def _run_csv_read_for_aimed_audio(self) -> Generator[AudioEditingTimestamp]:
+    def _run_csv_read_for_aimed_audio(
+        self,
+    ) -> Generator[AudioEditingTimestamp, None, None]:
         """
         Read csv file and derive the beginning and end which users want to keep in their audio
 
@@ -219,11 +226,16 @@ class CSVFileAudioEdit:
         with open(self.csv_file, mode="r") as csv_file:
             csv_rows = csv.DictReader(csv_file)
             for row in csv_rows:
+                if line_count := 0:
+                    continue
+
                 name, start, end = (
                     row["name"],
-                    row["start"],
+                    (row["start"]),
                     row["end"] if row["end"] else 0,
                 )
+                # check if there is a fullstop and if there is, use float, else use int
+
                 yield AudioEditingTimestamp(name, Timestamp(start, end))
 
     def _run_csv_read_timestamp(self) -> list[AudioEditingTimestamp]:
@@ -244,30 +256,6 @@ class CSVFileAudioEdit:
                 return (self._run_csv_read_for_aimed_audio(), "./main_body")
             case _:
                 raise ValueError("This csv type is not currently supported")
-
-
-"""
-Need a function to run argparse so that arguments can be passed from the 
-terminal. This will allow for chaining without having to touch the source code
-"""
-
-
-def run(csv_type: str, csv_path: str):
-    generated_information, return_directory = CSVFileAudioEdit(csv_path).process_csv(
-        csv_type
-    )
-
-    for info in generated_information:
-        audi_enhanced = AudioEditingEnhancement(info.filename, return_directory)
-        match csv_type:
-            case "podcast":
-                audi_enhanced.clip_file_start_and_end(info.timestamp)
-            case "main_body":
-                audi_enhanced.divide_by_specified_lengths(info.lengths)
-    return
-
-def main():
-    pass
 
 
 def main_test_mode():
